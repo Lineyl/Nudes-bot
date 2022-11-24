@@ -1,0 +1,59 @@
+import uuid
+
+
+class Repo:
+    """Db abstraction layer"""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    # users
+    async def add_user(self, user_id, invited_by=None) -> None:
+        invited_by = await self.conn.users.find_one({"referral_info.code": invited_by})
+        print(invited_by)
+        if invited_by:
+            await self.update_user(invited_by["user_id"],
+                                   {"$set": {f"referral_info.referrals.{user_id}": {"percent": 3, "profit": 0}}})
+        await self.conn.users.insert_one({"user_id": user_id,
+                                          "status": 0,
+                                          "invited_by": invited_by["user_id"] if invited_by else None,
+                                          "stats": {"summary": {"profit_from_purchases": 0,
+                                                                "purchases": 0,
+                                                                "profit_from_clicks": 0,
+                                                                "profit_from_referrals": 0,
+                                                                "withdraws": 0,
+                                                                "clicks": 0}},
+                                          "balance": 0,
+                                          "referral_info": {"referrals": {},
+                                                            "code": uuid.uuid4().hex[:12]},
+                                          "profit_percent": 0,
+                                          "reward_per_click": 0,
+                                          "to_withdraw": 0
+                                          })
+        return
+
+    async def get_user(self, user_id) -> dict:
+        return await self.conn.users.find_one({"user_id": user_id})
+
+    async def find_user(self, find_filter):
+        return await self.conn.users.find_one(find_filter)
+
+
+    async def update_user(self, user_id, update, find_filter=None):
+        if find_filter == None:
+            await self.conn.users.update_many({"user_id": user_id}, update, True)
+        else:
+            await self.conn.users.update_many(find_filter, update)
+
+    async def list_users(self):
+        users = self.conn.users.find({})
+        users = await users.to_list(length=50000)
+        return users
+
+    async def get_bots(self):
+        bots = self.conn.bots.find({"status": 1})
+        bots = await bots.to_list(length=100)
+        return bots
+
+    async def update_users(self, find_filter, update):
+        await self.conn.users.update_many(find_filter, update)
